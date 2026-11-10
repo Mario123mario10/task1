@@ -32,7 +32,13 @@ def list_books_json():
 def create_book():
     data = request.get_json()
 
-    new_book = Book(name=data['name'], author=data['author'], year_published=data['year_published'], book_type=data['book_type'])
+    try:
+        # Input data is validated in the Book model when the object is created
+        new_book = Book(name=data['name'], author=data['author'], year_published=data['year_published'], book_type=data['book_type'])
+    except ValueError as e:
+        # Validation failed - the book is not created and 400 Bad Request is returned
+        print('Invalid book data')
+        return jsonify({'error': f'Invalid book data: {str(e)}'}), 400
 
     try:
         # Add the new book to the session and commit to save to the database
@@ -58,20 +64,26 @@ def edit_book(book_id):
         print('Book not found')
         return jsonify({'error': 'Book not found'}), 404
 
+    # Get data from the request as JSON (Flask returns 400/415 itself if the body is not valid JSON).
+    # It is called outside of the try block, so this error is not turned into 500 below.
+    data = request.get_json()
+
     try:
-        # Get data from the request as JSON
-        data = request.get_json()
-        
-        # Update book details
+        # Update book details (values are validated in the Book model on assignment)
         book.name = data.get('name', book.name)  # Update if data exists, otherwise keep the same
         book.author = data.get('author', book.author)
         book.year_published = data.get('year_published', book.year_published)
         book.book_type = data.get('book_type', book.book_type)
-        
+
         # Commit the changes to the database
         db.session.commit()
         print('Book edited successfully')
         return jsonify({'message': 'Book updated successfully'})
+    except ValueError as e:
+        # Validation failed - discard the changes and return 400 Bad Request
+        db.session.rollback()
+        print('Invalid book data')
+        return jsonify({'error': f'Invalid book data: {str(e)}'}), 400
     except Exception as e:
         # Handle any exceptions
         db.session.rollback()
